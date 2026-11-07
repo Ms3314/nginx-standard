@@ -1,0 +1,12 @@
+services:
+  nginx:
+    image: ${IMAGE:?IMAGE is required}:${TAG:-latest}
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # - "443:443"   # enable when TLS is added
+    # Add backend services here when using reverse-proxy mode, e.g.:
+    # app:
+    #   image: your/app:tag
+    #   restart: unless-stopped
