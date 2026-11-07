@@ -11,7 +11,8 @@ git push main ─▶ GitHub Actions ─▶ build image (nginx -t runs) ─▶ pu
 
 | Path | Purpose |
 |---|---|
-| `nginx/conf.d/default.conf` | Server blocks. Static site by default; commented reverse-proxy example. |
+| `nginx/snippets/site.conf` | What the site serves. Static by default; commented reverse-proxy example. |
+| `nginx/templates/` | HTTP-only and HTTPS server blocks. The container picks one at start (HTTPS once a cert exists). |
 | `nginx/nginx.conf` | Global nginx settings. |
 | `html/` | Static files baked into the image. |
 | `docker-compose.yml` | Runtime on the VM. Add backend services here for proxy mode. |
@@ -34,7 +35,7 @@ Copy `scripts/vm-setup.sh` to the VM and run it with the **public** key:
 sudo bash vm-setup.sh "$(cat deploy_key.pub)"
 ```
 
-This installs Docker, creates a `deploy` user (docker group, no sudo), creates `/opt/nginx-base`, and opens ports 22 and 80.
+This installs Docker, creates a `deploy` user (docker group, no sudo), creates `/opt/nginx-base`, and opens ports 22, 80 and 443.
 
 ### 2. Add GitHub secrets
 
@@ -47,6 +48,8 @@ In the repo: Settings → Secrets and variables → Actions.
 | `VM_SSH_KEY` | contents of the **private** `deploy_key` |
 | `VM_KNOWN_HOSTS` | output of `ssh-keyscan -H <VM_IP>` |
 | `VM_PORT` | optional, defaults to 22 |
+
+And one repository **variable** (same page, "Variables" tab): `DOMAIN` = your subdomain, e.g. `app.example.com`.
 
 Also create an environment named `production` (Settings → Environments). You can add required reviewers there if you want a manual approval before each deploy.
 
@@ -74,9 +77,41 @@ docker run --rm -p 8080:80 nginx-base:dev
 curl localhost:8080/healthz
 ```
 
-## Adding HTTPS later
+## Custom subdomain + HTTPS
 
-You need a domain with an A record pointing at the VM. Then: obtain certs with certbot, mount them into the container in `docker-compose.yml`, expose `443:443`, and add a `listen 443 ssl;` server block plus a port-80 redirect in `default.conf`. Placeholders for these are already marked in the files.
+**1. DNS (at your domain provider)**
+
+Add a record for the subdomain:
+
+| Type | Name / Host | Value | TTL |
+|---|---|---|---|
+| `A` | the subdomain label only, e.g. `app` for `app.example.com` | the VM's public IPv4 | Auto or 300 |
+
+Add an `AAAA` record too only if the VM has a public IPv6 address and you want it used. If you use Cloudflare, set the record to **DNS only** (grey cloud) until the certificate is issued. Check it has propagated:
+
+```bash
+dig +short app.example.com   # should print the VM IP
+```
+
+**2. Cloud firewall**
+
+In your VM provider's console (security group / firewall rules), allow inbound TCP **80** and **443**. The `ufw` rule in `vm-setup.sh` only covers the OS firewall.
+
+**3. Repo / GitHub**
+
+Set the `DOMAIN` repository variable (see above), then push any commit to `main`. The pipeline writes `DOMAIN` into the VM's `.env`, and the site comes up on `http://app.example.com`.
+
+**4. Get the certificate (once, on the VM)**
+
+```bash
+sudo bash /opt/nginx-base/issue-cert.sh app.example.com you@example.com
+```
+
+This installs certbot, requests a Let's Encrypt cert through the running nginx, and recreates the container. On start, `nginx/docker-entrypoint.d/15-select-config.sh` sees the cert and switches to HTTPS mode: port 80 redirects to 443. Renewal is automatic (certbot's timer) and reloads nginx via a deploy hook.
+
+If the VM was set up before this change, also run `sudo ufw allow 443/tcp` and `sudo mkdir -p /var/www/certbot`.
+
+Later deploys keep using HTTPS automatically. Until a cert exists, the container falls back to HTTP-only so a deploy never fails for lack of one.
 
 ## Notes
 

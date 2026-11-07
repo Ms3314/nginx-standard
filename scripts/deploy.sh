@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# Runs ON THE VM. Usage: deploy.sh <image> <tag>
+# Runs ON THE VM. Usage: deploy.sh <image> <tag> [domain]
 # Pulls the new image, restarts the stack, waits for it to be healthy,
 # and rolls back to the previous tag if it is not.
 set -euo pipefail
 
 IMAGE="${1:?image required}"
 TAG="${2:?tag required}"
+DOMAIN_ARG="${3:-}"
 cd "$(dirname "$0")"
 
 PREV_TAG=""
+PREV_DOMAIN=""
 if [ -f .env ]; then
   PREV_TAG="$(grep '^TAG=' .env | cut -d= -f2- || true)"
+  PREV_DOMAIN="$(grep '^DOMAIN=' .env | cut -d= -f2- || true)"
 fi
+# Use the domain passed by the pipeline, else keep what was there, else match-all
+DOMAIN="${DOMAIN_ARG:-${PREV_DOMAIN:-_}}"
 
-write_env() { printf 'IMAGE=%s\nTAG=%s\n' "$IMAGE" "$1" > .env; }
+write_env() { printf 'IMAGE=%s\nTAG=%s\nDOMAIN=%s\n' "$IMAGE" "$1" "$DOMAIN" > .env; }
 
 wait_healthy() {
   for _ in $(seq 1 30); do

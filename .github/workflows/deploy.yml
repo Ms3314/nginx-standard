@@ -70,7 +70,7 @@ jobs:
       - name: Copy compose file and deploy script
         run: |
           scp -i ~/.ssh/id_deploy -P "${{ secrets.VM_PORT || 22 }}" \
-            docker-compose.yml scripts/deploy.sh \
+            docker-compose.yml scripts/deploy.sh scripts/issue-cert.sh \
             "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/opt/nginx-base/"
 
       - name: Pull and restart on the VM
@@ -79,7 +79,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | ssh -i ~/.ssh/id_deploy -p "${{ secrets.VM_PORT || 22 }}" \
             "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" \
             "docker login ghcr.io -u '${{ github.actor }}' --password-stdin && \
-             /opt/nginx-base/deploy.sh '${{ needs.build.outputs.image }}' '${{ needs.build.outputs.tag }}'"
+             /opt/nginx-base/deploy.sh '${{ needs.build.outputs.image }}' '${{ needs.build.outputs.tag }}' '${{ vars.DOMAIN }}'"
 
       - name: Smoke test
         run: curl -fsS --retry 5 --retry-delay 3 "http://${{ secrets.VM_HOST }}/healthz"

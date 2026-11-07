@@ -1,0 +1,8 @@
+# Used until a certificate exists for $DOMAIN.
+server {
+    listen 80 default_server;
+    server_name ${DOMAIN};
+
+    include /etc/nginx/snippets/common.conf;
+    include /etc/nginx/snippets/site.conf;
+}

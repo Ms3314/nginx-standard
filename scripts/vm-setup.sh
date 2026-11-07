@@ -23,9 +23,11 @@ chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
 # App directory the pipeline copies into
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR"
 
+install -d /var/www/certbot
+
 # Firewall (if ufw is present)
 if command -v ufw >/dev/null; then
-  ufw allow OpenSSH && ufw allow 80/tcp && ufw --force enable
+  ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 fi
 
 echo "Done. Add the matching private key as the VM_SSH_KEY secret in GitHub."
